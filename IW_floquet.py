@@ -62,7 +62,8 @@ def GR_at_alpha_beta_gamma(A,Ek,N_modes,alpha,beta,gamma,kx,kz,s,nv,norm):
                 [0.0, kx/k, 1j*kz/k*(gamma+n)+Ek*Ln, -1j*(gamma+n)],
                 [1j*beta*kz/k, -1j*kz/k*alpha-1j*kx/k*(gamma+n), 1j*beta*kx/k, Ln]
                 ], dtype=complex)
-                
+                A=-A*k/kx
+                '''
                 Anpo = np.array([
                 [1j*alpha*A*k/2.0/kx-beta*A*k/2.0/kx, 0.0, -1j*A*k/2.0/kx, 0.0],
                 [0.0, 1j*alpha*A*k/2/kx-beta*A*k/2.0/kx, A*k/2.0/kx, 0.0],
@@ -76,6 +77,7 @@ def GR_at_alpha_beta_gamma(A,Ek,N_modes,alpha,beta,gamma,kx,kz,s,nv,norm):
                 [0.0, 0.0, 1j*alpha*A*k/2.0/kx+beta*A*k/2.0/kx, 0.0],
                 [0.0, 0.0,  alpha*A*k/kx-1j*beta*A*k/kx, 0.0]
                 ], dtype=complex)
+                '''
             if norm==2:# time normalized wrt \omega
                 An = np.array([
                 [1j*om_ratio*(gamma+n)+Ek*Ln, kz/abs_kz, 0.0, -1j*alpha],
@@ -84,19 +86,19 @@ def GR_at_alpha_beta_gamma(A,Ek,N_modes,alpha,beta,gamma,kx,kz,s,nv,norm):
                 [1j*beta*kz/abs_kz, -1j*kz/abs_kz*alpha-1j*kx/abs_kz*(gamma+n), 1j*beta*kx/abs_kz, Ln]
                 ], dtype=complex)
                 adv=1#toggle if want to turn off advective term
-                Anpo = -np.array([
-                [1j*alpha*A/2.0-beta*s*A/2.0, 0.0, -1j*adv*A/2.0, 0.0],
-                [0.0, 1j*alpha*A/2-beta*s*A/2.0, s*adv*A/2.0, 0.0],
-                [0.0, 0.0, 1j*alpha*A/2.0-beta*s*A/2.0, 0.0],
-                [0.0, 0.0, -alpha*A-1j*beta*s*A, 0.0]
-                ], dtype=complex)
+            Anpo = -A*np.array([
+            [1j*alpha/2.0-beta*s/2.0, 0.0, -1j*adv/2.0, 0.0],
+            [0.0, 1j*alpha/2-beta*s/2.0, s*adv/2.0, 0.0],
+            [0.0, 0.0, 1j*alpha/2.0-beta*s/2.0, 0.0],
+            [0.0, 0.0, -alpha-1j*beta*s, 0.0]
+            ], dtype=complex)
                         
-                Anmo = -np.array([
-                [1j*alpha*A/2.0+beta*s*A/2.0, 0.0,  1j*adv*A/2.0, 0.0],
-                [0.0, 1j*alpha*A/2+beta*s*A/2.0, s*adv*A/2.0, 0.0],
-                [0.0, 0.0, 1j*alpha*A/2.0+beta*s*A/2.0, 0.0],
-                [0.0, 0.0,  alpha*A-1j*beta*s*A, 0.0]
-                ], dtype=complex)
+            Anmo = -A*np.array([
+            [1j*alpha/2.0+beta*s/2.0, 0.0,  1j*adv/2.0, 0.0],
+            [0.0, 1j*alpha/2+beta*s/2.0, s*adv/2.0, 0.0],
+            [0.0, 0.0, 1j*alpha/2.0+beta*s/2.0, 0.0],
+            [0.0, 0.0,  alpha-1j*beta*s, 0.0]
+            ], dtype=complex)
             
             Bmat[m*nv:(m+1)*nv,m*nv:(m+1)*nv]=Bn
                     
