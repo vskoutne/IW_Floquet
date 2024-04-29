@@ -28,8 +28,8 @@ theta       = 10
 norm        = 2      #1 is time normalization wrt 2\Omega, 2 is time normalization wrt \omega
 A           = 0.2
 
-savename='A25e-2_theta%d_Ek0e0_Nab%d_Nmodes%d_nv%d'%(theta,N_res_ab,N_modes,nv)
-
+savename = 'A25e-2_theta%d_Ek0e0_Nab%d_Nmodes%d_nv%d'%(theta,N_res_ab,N_modes,nv)
+readtxt  = 1
 
 #To compare with old normalization, A_new = A_old*k**2/kx/kz and sigma_new = sigma_old*k/kz
 
@@ -179,9 +179,13 @@ def get_alpha_beta_plane_singlecore(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx
 
 
 
-def plotGR_alphabeta(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, savename):
-    growthrate = get_alpha_beta_plane(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm)
+def plotGR_alphabeta(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, savename, readtxt):
+    if not readtxt:
+        growthrate = get_alpha_beta_plane(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm)
+        if my_rank==0:
+            np.savetxt(savename+"_ab.txt",growthrate)
     if my_rank==0:
+        growthrate=np.loadtxt(savename+"_ab.txt")
         N_res_alpha,N_res_beta=N_res,int(N_res*betamax/alphamax/2)
         alpharange, betarange = np.linspace(-alphamax,alphamax,N_res_alpha), np.linspace(0,betamax,N_res_beta)
         k      = np.sqrt(kx**2+kz**2)
@@ -425,11 +429,12 @@ def writeEigenmode(A,Ek,N_res,N_modes,gamma,kx,kz,nv,alpha,beta):
 
 
 time_start = time.time()
-scan_n_save_A_vs_omega(Ek,s,N_res_A_om,N_res_ab,N_modes,alphamax,betamax,N_res_gamma,nv,norm,savename)
-if my_rank==0:
-    plot_scan_A_vs_om(Ek,N_res_A_om,nv,savename)
 
-#plotGR_alphabeta(A,Ek,N_res_ab,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, savename)
+#scan_n_save_A_vs_omega(Ek,s,N_res_A_om,N_res_ab,N_modes,alphamax,betamax,N_res_gamma,nv,norm,savename)
+#if my_rank==0:
+#    plot_scan_A_vs_om(Ek,N_res_A_om,nv,savename)
+
+plotGR_alphabeta(A,Ek,N_res_ab,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, savename, readtxt)
 #writeEigenmode(A,Ek,N_res_ab,N_modes,gamma,kx,kz,nv,alpha=0.0,beta=4.0)
 if my_rank==0:
     time_end = time.time()
