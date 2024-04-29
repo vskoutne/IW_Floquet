@@ -28,8 +28,9 @@ theta       = 10
 norm        = 2      #1 is time normalization wrt 2\Omega, 2 is time normalization wrt \omega
 A           = 0.2
 
-savename = 'A25e-2_theta%d_Ek0e0_Nab%d_Nmodes%d_nv%d'%(theta,N_res_ab,N_modes,nv)
-readtxt  = 1
+savename = 'A%d_theta%d_Ek0e0_Nab%d_Nmodes%d_nv%d'%(int(100*A),theta,N_res_ab,N_modes,nv)
+# savename = 'A25e-2_theta%d_Ek0e0_Nab%d_Nmodes%d_nv%d'%(theta,N_res_ab,N_modes,nv)
+readtxt  = 0
 
 #To compare with old normalization, A_new = A_old*k**2/kx/kz and sigma_new = sigma_old*k/kz
 
@@ -226,7 +227,7 @@ def plotGR_alphabeta(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, 
         u_n=v[::nv]
         v_n=v[1::nv]
         w_n=v[2::nv]
-        alpha2,beta2=-alpha_at_max,-beta_at_max
+        alpha2,beta2=-alpha_at_max,beta_at_max
         sigma2,v=GR_at_alpha_beta_gamma(A,Ek,N_modes,alpha2,beta2,gamma,kx,kz,s,nv,norm)
         u2_n=v[::nv]#[::-1]
         v2_n=v[1::nv]#[::-1]
@@ -234,37 +235,37 @@ def plotGR_alphabeta(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, 
         
         fig,ax=plt.subplots(1,1,figsize=(11,8))
         ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.real(u_n),linewidth=lw,label="Re($u_n$) for $\\alpha,\\beta$",color='r')
-        ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.real(u2_n),linewidth=lw,label="Re($u_n$) for $-\\alpha,-\\beta$",color='r',linestyle=":")
+        ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.real(u2_n),linewidth=lw,label="Re($u_n$) for $\\alpha_2,\\beta_2$",color='r',linestyle=":")
         ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.real(v_n),linewidth=lw,label="Re($v_n$) for $\\alpha,\\beta$",color='g')
-        ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.real(v2_n),linewidth=lw,label="Re($v_n$) for $-\\alpha,-\\beta$",color='g',linestyle=":")
+        ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.real(v2_n),linewidth=lw,label="Re($v_n$) for $\\alpha_2,\\beta_2$",color='g',linestyle=":")
         ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.real(w_n),linewidth=lw,label="Re($w_n$) for $\\alpha,\\beta$",color='blue')
-        ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.real(w2_n),linewidth=lw,label="Re($w_n$) for $-\\alpha,-\\beta$",color='blue',linestyle=":")
-        ax.legend(fontsize=FNTSZ-4,loc=0)
+        ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.real(w2_n),linewidth=lw,label="Re($w_n$) for $\\alpha_2,\\beta_2$",color='blue',linestyle=":")
+        ax.legend(fontsize=FNTSZ-8,loc=0)
         ax.axvline(x=0,color='gray',linestyle=":")
         ax.set_xlabel("$n$",fontsize=FNTSZ+4)
-        ax.set_ylabel("Eigenvector Components",fontsize=FNTSZ,rotation=90,labelpad=10)
+        ax.set_ylabel("Eigenvector Components"+", N="+str(N_modes)+", nv="+str(nv),fontsize=FNTSZ,rotation=90,labelpad=10)
         ax.tick_params(labelsize=FNTSZ)
-        plt.title("$(\\alpha,\\beta,\\gamma)=$(%0.1f,%0.1f,%0.1f)"%(alpha_at_max,beta_at_max,gamma)+", A=%0.2f"%(A)+", $(k_x,k_z)=$(%0.1f,%0.1f)"%(kx,kz)+", N="+str(N_modes)+", nv="+str(nv),fontsize=FNTSZ-4)
+        plt.title("$(\\alpha,\\beta,\\gamma)=$(%0.1f,%0.1f,%0.1f)"%(alpha_at_max,beta_at_max,gamma)+", $(\\alpha_2,\\beta_2,\\gamma)=$(%0.1f,%0.1f,%0.1f)"%(alpha2,beta2,gamma)+", A=%0.2f"%(A)+", $(k_x,k_z)=$(%0.1f,%0.1f)"%(kx,kz),fontsize=FNTSZ-4)
         plt.tight_layout()
-        plt.savefig(savename+"_eigenvector_un.png")
+        plt.savefig(savename+"_eigenvector_un_Re.png")
 
         fig,ax=plt.subplots(1,1,figsize=(11,8))
         ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.imag(u_n),linewidth=lw,label="Im($u_n$) for $\\alpha,\\beta$",color='r')
-        ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.imag(u2_n),linewidth=lw,label="Im($u_n$) for $-\\alpha,-\\beta$",color='r',linestyle=":")
+        ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.imag(u2_n),linewidth=lw,label="Im($u_n$) for $\\alpha_2,\\beta_2$",color='r',linestyle=":")
         ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.imag(v_n),linewidth=lw,label="Im($v_n$) for $\\alpha,\\beta$",color='g')
-        ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.imag(v2_n),linewidth=lw,label="Im($v_n$) for $-\\alpha,-\\beta$",color='g',linestyle=":")
+        ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.imag(v2_n),linewidth=lw,label="Im($v_n$) for $\\alpha_2,\\beta_2$",color='g',linestyle=":")
         ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.imag(w_n),linewidth=lw,label="Im($w_n$) for $\\alpha,\\beta$", color='blue')
-        ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.imag(w2_n),linewidth=lw,label="Im($w_n$) for $-\\alpha,-\\beta$", color='blue',linestyle=":")
-        ax.text(-10,0.4,"$\\sigma(\\alpha,\\beta)=$"+str(sigma))
-        ax.text(-10,0.35,"$\\sigma(-\\alpha,-\\beta)=$"+str(sigma2))
-        ax.legend(fontsize=FNTSZ-4,loc=0)
+        ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.imag(w2_n),linewidth=lw,label="Im($w_n$) for $\\alpha_2,\\beta_2$", color='blue',linestyle=":")
+        ax.text(-N_modes/2+1,0.4,"$\\sigma(%0.2f,%0.2f)=$"%(alpha_at_max,beta_at_max)+str(sigma))
+        ax.text(-N_modes/2+1,0.35,"$\\sigma(%0.2f,%0.2f)=$"%(alpha2,beta2)+str(sigma2))
+        ax.legend(fontsize=FNTSZ-8,loc=0)
         ax.axvline(x=0,color='gray',linestyle=":")
         ax.set_xlabel("$n$",fontsize=FNTSZ+4)
-        ax.set_ylabel("Eigenvector Components",fontsize=FNTSZ,rotation=90,labelpad=10)
+        ax.set_ylabel("Eigenvector Components"+", N="+str(N_modes)+", nv="+str(nv),fontsize=FNTSZ,rotation=90,labelpad=10)
         ax.tick_params(labelsize=FNTSZ)
-        plt.title("$(\\alpha,\\beta,\\gamma)=$(%0.1f,%0.1f,%0.1f)"%(alpha2,beta2,gamma)+", A=%0.2f"%(A)+", $(k_x,k_z)=$(%0.1f,%0.1f)"%(kx,kz)+", N="+str(N_modes)+", nv="+str(nv),fontsize=FNTSZ-4)
+        plt.title("$(\\alpha,\\beta,\\gamma)=$(%0.1f,%0.1f,%0.1f)"%(alpha_at_max,beta_at_max,gamma)+", $(\\alpha_2,\\beta_2,\\gamma)=$(%0.1f,%0.1f,%0.1f)"%(alpha2,beta2,gamma)+", A=%0.2f"%(A)+", $(k_x,k_z)=$(%0.1f,%0.1f)"%(kx,kz),fontsize=FNTSZ-4)
         #plt.tight_layout()
-        plt.savefig(savename+"_eigenvector_un.png")
+        plt.savefig(savename+"_eigenvector_un_Im.png")
 
 
         plt.show()
@@ -272,7 +273,7 @@ def plotGR_alphabeta(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, 
 
 def scan_n_save_A_vs_omega(Ek,s,N_res_A_om,N_res_ab,N_modes,alphamax,betamax,N_res_gamma,nv,norm,savename):
     growthrate = np.zeros((N_res_A_om,N_res_A_om))
-    gamma      = np.linspace(0,1,N_res_gamma)
+    gamma      = np.linspace(0,1-1.0/N_res_gamma,N_res_gamma)
     theta      = np.linspace(3.0,87.0,N_res_A_om)*np.pi/180
     kx         = np.sin(theta)
     kz         = np.cos(theta)
@@ -430,11 +431,14 @@ def writeEigenmode(A,Ek,N_res,N_modes,gamma,kx,kz,nv,alpha,beta):
 
 time_start = time.time()
 
+
+plotGR_alphabeta(A,Ek,N_res_ab,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, savename, readtxt)
+
+
+#Uncomment if the scan of A vs \omega is needed
 #scan_n_save_A_vs_omega(Ek,s,N_res_A_om,N_res_ab,N_modes,alphamax,betamax,N_res_gamma,nv,norm,savename)
 #if my_rank==0:
 #    plot_scan_A_vs_om(Ek,N_res_A_om,nv,savename)
-
-plotGR_alphabeta(A,Ek,N_res_ab,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, savename, readtxt)
 #writeEigenmode(A,Ek,N_res_ab,N_modes,gamma,kx,kz,nv,alpha=0.0,beta=4.0)
 if my_rank==0:
     time_end = time.time()
