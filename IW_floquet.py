@@ -15,13 +15,13 @@ my_rank = world_comm.Get_rank()
 
 
 #if scanning A and omega
-N_res_A_om  = 64
-N_res_gamma = 8
+N_res_A_om  = 8
+N_res_gamma = 1
 
 
 alphamax,betamax = 2,2 # currently scans positive beta
 nv          = 4      # 3 or 4
-N_res_ab    = 16     # Resolution of alpha_beta plane
+N_res_ab    = 8     # Resolution of alpha_beta plane
 N_modes     = 16
 Ek          = 0#1e-5
 theta       = 10
@@ -161,6 +161,22 @@ def get_alpha_beta_plane(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,no
     world_comm.Allreduce( [growthrate, MPI.DOUBLE], [temp, MPI.DOUBLE], op = MPI.SUM )
     return temp
 
+def get_alpha_beta_plane_singlecore(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm):
+    #return a 2d array containing the growth rate for each alpha,beta
+    #Scan only positive beta
+    N_res_alpha,N_res_beta = N_res,int(N_res*betamax/alphamax/2)
+    alpharange, betarange  = np.linspace(-alphamax,alphamax,N_res_alpha), np.linspace(0,betamax,N_res_beta)
+    growthrate=np.zeros((N_res_alpha,N_res_beta))
+    for i in range(my_rank,N_res_alpha):
+        alpha=alpharange[i]
+        for j in range(N_res_beta):
+            beta=betarange[j]
+            sigma, un = GR_at_alpha_beta_gamma(A,Ek,N_modes,alpha,beta,gamma,kx,kz,s,nv,norm)
+            sigma = np.real(sigma)
+            if sigma>0:
+                growthrate[i,j]=sigma#*kz/k
+    return growthrate
+
 
 
 def plotGR_alphabeta(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, savename):
@@ -250,99 +266,98 @@ def plotGR_alphabeta(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, 
         plt.show()
 
 
-def calcGR_somega(Ek,N_res_sow,N_res_ab,N_modes,alphamax,betamax,N_res_gamma,nv,savename):
-    growthrate=np.zeros((N_res_sow,N_res_sow))
-    gamma=np.linspace(0,1,N_res_gamma)
-    kx=1.0
-    kz=np.logspace(-1,np.log10(4.0),N_res_sow)
-    s=np.logspace(-2,0,N_res_sow)
-    k      = np.sqrt(kx**2+kz**2)
-    om     = kz/k
-    f=open(savename+".txt",'w')
-    for i in range(N_res_sow):
-        #print("s loop: i = "+str(i)+" out of: "+str(N_res_sow))
-        for j in range(N_res_sow):
+def scan_n_save_A_vs_omega(Ek,s,N_res_A_om,N_res_ab,N_modes,alphamax,betamax,N_res_gamma,nv,norm,savename):
+    growthrate = np.zeros((N_res_A_om,N_res_A_om))
+    gamma      = np.linspace(0,1,N_res_gamma)
+    theta      = np.linspace(3.0,87.0,N_res_A_om)*np.pi/180
+    kx         = np.sin(theta)
+    kz         = np.cos(theta)
+    k          = np.sqrt(kx**2+kz**2)
+    om         = kz/k
+    A          = np.logspace(-1,0,N_res_A_om)
+
+    for i in range(my_rank,N_res_A_om,world_size):
+        #print("s loop: i = "+str(i)+" out of: "+str(N_res_A_om))
+        for j in range(N_res_A_om):
             sigma=0
             for k in range(N_res_gamma):
-                growthrate_temp=getGR(s[i],Ek,N_res_ab,N_modes,alphamax,betamax,gamma[k],kx,kz[j],nv)
+                growthrate_temp=get_alpha_beta_plane_singlecore(A[i],Ek,N_res_ab,N_modes,alphamax,betamax,gamma[k],kx[j],kz[j],s,nv,norm)
+                #growthrate_temp=getGR(s[i],Ek,N_res_ab,N_modes,alphamax,betamax,gamma[k],kx,kz[j],nv)
                 sigma=max(sigma, growthrate_temp.max()) #find the mode with the highest growth rate
             growthrate[i,j]=sigma
-        f.write(" ".join(map(str, growthrate[i,:]))+"\n")
-    f.close()
+    temp=np.copy(growthrate)
+    world_comm.Allreduce( [growthrate, MPI.DOUBLE], [temp, MPI.DOUBLE], op = MPI.SUM )
+    if my_rank==0:
+        f = open(savename+".txt",'w')
+        for i in range(N_res_A_om):
+            f.write(" ".join(map(str, temp[i,:]))+"\n")
+        f.close()
     
-def plotGR_somega(Ek,N_res_sow,nv,savename):
+def plot_scan_A_vs_om(Ek,N_res_A_om,nv,savename):
     cmap=matplotlib.cm.plasma
     FNTSZ=24
     lw=2
-    skip=4
-    kx=1.0
-    kz=np.logspace(-1,np.log10(4.0),N_res_sow)
-    s=np.logspace(-2,0,N_res_sow)
-    k      = np.sqrt(kx**2+kz**2)
-    om     = kz/k
+    skip=1
+    theta      = np.linspace(1.0/N_res_A_om,90-1.0/N_res_A_om,N_res_A_om)*np.pi/180
+    kx         = np.sin(theta)
+    kz         = np.cos(theta)
+    k          = np.sqrt(kx**2+kz**2)
+    om         = kz/k
+    A          = np.logspace(-1,0,N_res_A_om)
     growthrate=np.loadtxt(savename+".txt")
-    
+
     fig,ax=plt.subplots(1,1,figsize=(10,8))
     
-    norm = matplotlib.colors.Normalize(vmin=np.min(np.log10(s)),vmax=np.max(np.log10(s)))
-    s_m = matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm)
+    norm = matplotlib.colors.Normalize(vmin=np.min(np.log10(A)),vmax=np.max(np.log10(A)))
+    s_m  = matplotlib.cm.ScalarMappable(cmap=cmap, norm=norm)
     s_m.set_array([])
 
-    for i in range(N_res_sow)[::skip]:
-        #ax.plot(om,growthrate[i,:]/s[i],label="$s$=%.2f"%(s[i]),linewidth=lw)
-        ax.plot(om,growthrate[i,:]/s[i]/om,linewidth=lw,color=s_m.to_rgba(np.log10(s[i]) ))#label="$s$=%.2f"%(s[i]))
-    #ax.legend()
+    for i in range(N_res_A_om)[::skip]:
+        ax.plot(om,growthrate[i,:]/A[i]/om,linewidth=lw,color=s_m.to_rgba(np.log10(A[i]) ))#label="$s$=%.2f"%(s[i]))
     cbar=plt.colorbar(s_m,ax=plt.gca())
-    cbar.set_label('$\\log(s)$',rotation=90,fontsize=FNTSZ)
+    cbar.set_label("$\\log(A')$",rotation=90,fontsize=FNTSZ)
     cbar.ax.tick_params(labelsize=FNTSZ-4)
     ax.set_xlabel("$\\frac{\\omega}{2\\Omega}$",fontsize=FNTSZ+4)
-    ax.set_ylabel("$\\frac{\\sigma}{s\\omega}$",fontsize=FNTSZ+4,rotation=0,labelpad=20)
+    ax.set_ylabel("$\\frac{\\sigma}{A'|\\omega|}$",fontsize=FNTSZ+4,rotation=0,labelpad=20)
     #ax.set_xscale('log')
     #ax.set_yscale('log')
-    
+
+    #SNOOPY comparison
     om_marker=[1/np.sqrt(6**2+1**2),1/np.sqrt(4**2+1**2),1/np.sqrt(3**2+1**2),1/np.sqrt(2**2+1**2),1/np.sqrt(1**2+1**2),2/np.sqrt(1**2+2**2),3/np.sqrt(1**2+3**2)]
     sigma_marker=[1.63,1.18,0.95,0.72,0.59,0.79,1.1]
     ax.scatter(om_marker,sigma_marker,marker='x',color='black',s=100,zorder=100)
     
- 
     ax.tick_params(labelsize=FNTSZ-4)
-    #plt.title("Ek="+str(Ek)+", N="+str(N_modes)+", nv="+str(nv),fontsize=FNTSZ-4)
     plt.tight_layout()
     plt.savefig(savename+"_om_vs_gr.png")
     
     fig,ax=plt.subplots(1,1,figsize=(10,8))
-    for i in range(N_res_sow)[::skip]:
-        #ax.plot(s,growthrate[:,i]/s,label="$\\omega$=%f"%(om[i]))
-        ax.plot(s,growthrate[:,i]/s/om[i],label="$\\omega$=%.2f"%(om[i]))
+    for i in range(N_res_A_om)[::skip]:
+        ax.plot(A,growthrate[:,i]/A/om[i],label="$\\omega$=%.2f"%(om[i]))
     ax.legend()
-    ax.set_xlabel("$s$",fontsize=FNTSZ+4)
-    ax.set_ylabel("$\\frac{\\sigma}{s\\omega}$",fontsize=FNTSZ+4,rotation=0,labelpad=10)
+    ax.set_xlabel("$A'$",fontsize=FNTSZ+4)
+    ax.set_ylabel("$\\frac{\\sigma}{A'|\\omega|}$",fontsize=FNTSZ+4,rotation=0,labelpad=10)
     
-    #ax.set_xscale('log')
-    #ax.set_yscale('log')
     #ax.set_ylim(top=om[-1])
     #ax.set_xlim(right=s[-1])
     ax.tick_params(labelsize=FNTSZ)
     plt.title("Ek="+str(Ek)+", N="+str(N_modes)+", nv="+str(nv),fontsize=FNTSZ+4)
     plt.tight_layout()
     plt.savefig(savename+"_s_vs_gr.png")
-    
-    #plt.show()
-
 
     fig,ax=plt.subplots(1,1,figsize=(10,8))
     #pmesh=ax.pcolormesh(s,om,np.log10(growthrate.T),cmap="cividis",shading='gouraud')
-    pmesh=ax.contourf(s,om,np.log10(growthrate.T),cmap="cividis",levels=20)
+    pmesh=ax.contourf(A,om,np.log10(growthrate.T),cmap="cividis",levels=20)
     cbar=fig.colorbar(pmesh,ax=ax)
 
     cbar.ax.tick_params(labelsize=FNTSZ)
     cbar.set_label("$\\sigma$",fontsize=FNTSZ+4,rotation=0)
-    ax.set_xlabel("$s$",fontsize=FNTSZ+6)
+    ax.set_xlabel("$A'$",fontsize=FNTSZ+6)
     ax.set_ylabel("$\\frac{\\omega}{2\\Omega}$",fontsize=FNTSZ+6,rotation=0,labelpad=10)
     ax.set_xscale('log')
     #ax.set_yscale('log')
-    ax.set_ylim(top=om[-1])
-    ax.set_xlim(right=s[-1])
+    #ax.set_ylim(top=om[-1])
+    #ax.set_xlim(right=A[-1])
     ax.tick_params(labelsize=FNTSZ)
     #ax.set_aspect("equal")
     plt.title("Ek="+str(Ek)+", N="+str(N_modes)+", nv="+str(nv),fontsize=FNTSZ+4)
@@ -410,13 +425,11 @@ def writeEigenmode(A,Ek,N_res,N_modes,gamma,kx,kz,nv,alpha,beta):
 
 
 time_start = time.time()
+scan_n_save_A_vs_omega(Ek,s,N_res_A_om,N_res_ab,N_modes,alphamax,betamax,N_res_gamma,nv,norm,savename)
+if my_rank==0:
+    plot_scan_A_vs_om(Ek,N_res_A_om,nv,savename)
 
-# savename='N%d_Nab%d_Ngamma%d_Nmodes%d'%(N_res_sow,N_res_ab,N_res_gamma,N_modes)
-#calcGR_somega(Ek,N_res_sow,N_res_ab,N_modes,alphamax,betamax,N_res_gamma,nv,savename)
-#if my_rank==0:
-#    plotGR_somega(Ek,N_res_sow,nv,savename)
-
-plotGR_alphabeta(A,Ek,N_res_ab,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, savename)
+#plotGR_alphabeta(A,Ek,N_res_ab,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, savename)
 #writeEigenmode(A,Ek,N_res_ab,N_modes,gamma,kx,kz,nv,alpha=0.0,beta=4.0)
 if my_rank==0:
     time_end = time.time()
