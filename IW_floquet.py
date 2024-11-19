@@ -15,15 +15,15 @@ my_rank = world_comm.Get_rank()
 
 
 #if scanning A and omega
-N_res_A_om  = 8
-N_res_gamma = 1
+N_res_A_om  = 16
+N_res_gamma = 2
 
 
 alphamax,betamax = 2,2 # currently scans positive beta
 nv          = 4      # 3 or 4
-N_res_ab    = 8     # Resolution of alpha_beta plane
-N_modes     = 16
-Ek          = 0#1e-5
+N_res_ab    = 5     # Resolution of alpha_beta plane
+N_modes     = 32
+Ek          = 1e-6
 theta       = 10
 norm        = 2      #1 is time normalization wrt 2\Omega, 2 is time normalization wrt \omega
 A           = 0.2
@@ -149,8 +149,10 @@ def get_alpha_beta_plane(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,no
     #return a 2d array containing the growth rate for each alpha,beta
 
     #Scan only positive beta
-    N_res_alpha,N_res_beta = N_res,int(N_res*betamax/alphamax/2)
-    alpharange, betarange  = np.linspace(-alphamax,alphamax,N_res_alpha), np.linspace(0,betamax,N_res_beta)
+    #N_res_alpha,N_res_beta = N_res,int(N_res*betamax/alphamax/2)+1
+    #alpharange, betarange  = np.linspace(-alphamax,alphamax,N_res_alpha), np.linspace(0,betamax,N_res_beta)
+    N_res_alpha,N_res_beta = N_res,N_res
+    alpharange, betarange  = np.linspace(0,alphamax,N_res_alpha), np.linspace(0,betamax,N_res_beta)
     growthrate=np.zeros((N_res_alpha,N_res_beta))
     for i in range(my_rank,N_res_alpha,world_size):
         alpha=alpharange[i]
@@ -167,11 +169,14 @@ def get_alpha_beta_plane(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,no
 def get_alpha_beta_plane_singlecore(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm):
     #return a 2d array containing the growth rate for each alpha,beta
     #Scan only positive beta
-    N_res_alpha,N_res_beta = N_res,int(N_res*betamax/alphamax/2)
-    alpharange, betarange  = np.linspace(-alphamax,alphamax,N_res_alpha), np.linspace(0,betamax,N_res_beta)
+    #N_res_alpha,N_res_beta = N_res,int(N_res*betamax/alphamax/2)
+    #alpharange, betarange  = np.linspace(-alphamax,alphamax,N_res_alpha), np.linspace(0,betamax,N_res_beta)
+    N_res_alpha,N_res_beta = N_res,N_res
+    alpharange, betarange  = np.linspace(0,alphamax,N_res_alpha), np.linspace(0,betamax,N_res_beta)
     growthrate=np.zeros((N_res_alpha,N_res_beta))
     for i in range(my_rank,N_res_alpha):
         alpha=alpharange[i]
+        print(str(my_rank)+", alpha= "+str(i))
         for j in range(N_res_beta):
             beta=betarange[j]
             sigma, un = GR_at_alpha_beta_gamma(A,Ek,N_modes,alpha,beta,gamma,kx,kz,s,nv,norm)
@@ -189,8 +194,10 @@ def plotGR_alphabeta(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, 
             np.savetxt(savename+"_ab.txt",growthrate)
     if my_rank==0:
         growthrate=np.loadtxt(savename+"_ab.txt")
-        N_res_alpha,N_res_beta=N_res,int(N_res*betamax/alphamax/2)
-        alpharange, betarange = np.linspace(-alphamax,alphamax,N_res_alpha), np.linspace(0,betamax,N_res_beta)
+        #N_res_alpha,N_res_beta=N_res,int(N_res*betamax/alphamax/2)+1
+        #alpharange, betarange = np.linspace(-alphamax,alphamax,N_res_alpha), np.linspace(0,betamax,N_res_beta)
+        N_res_alpha,N_res_beta = N_res,N_res
+        alpharange, betarange  = np.linspace(0,alphamax,N_res_alpha), np.linspace(0,betamax,N_res_beta)
         k      = np.sqrt(kx**2+kz**2)
         om     = kz/k
         FNTSZ=24
@@ -201,13 +208,13 @@ def plotGR_alphabeta(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, 
 
         print("Highest GR: "+str(sigma))
         ############# alpha beta plane plot ###############
-        fig,ax=plt.subplots(1,1,figsize=(11,8))
+        fig,ax=plt.subplots(1,1,figsize=(12,9))
         if norm==1:
             sigma_norm=(A*k/np.abs(om))
         if norm==2:
             sigma_norm = A
-        sigma_norm=1*kz/k  #if you don't want to normalize the growth rate
-        pmesh=ax.pcolormesh(alpharange,betarange,growthrate.T/sigma_norm,cmap="cividis")#,shading='gouraud')
+        #sigma_norm=1*kz/k  #if you don't want to normalize the growth rate
+        pmesh=ax.pcolormesh(alpharange,betarange,growthrate.T/sigma_norm,cmap="cividis",vmin=0,vmax=0.35)#,shading='gouraud')
         #pmesh=ax.contourf(alpharange,betarange,growthrate.T/(A*k/np.abs(kx*om)),cmap="cividis")
         #ax.scatter([ alpha_at_max ],[ beta_at_max ],s=100,color='red',marker='*')
         #ax.scatter([ -alpha_at_max ],[ -beta_at_max ],s=100,color='red',marker='*')
@@ -217,11 +224,12 @@ def plotGR_alphabeta(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, 
         cbar.set_label("$\\frac{\\sigma}{A'|\\omega|}$",fontsize=FNTSZ+8,rotation=0,labelpad=30)
         ax.set_xlabel("$\\alpha$",fontsize=FNTSZ+4)
         ax.set_ylabel("$\\beta$",fontsize=FNTSZ+4,rotation=0,labelpad=10)
-
+        plt.title("Floquet")
         ax.tick_params(labelsize=FNTSZ)
         #ax.set_aspect("equal")
         #plt.title("s="+str(A)+", Ek="+str(Ek)+", $\\omega/2\\Omega=$%0.2f"%(om)+", $\\gamma=$"+str(gamma)+", N="+str(N_modes)+", nv="+str(nv),fontsize=FNTSZ+4)
         plt.tight_layout()
+        ax.set_aspect('equal', 'box')
         plt.savefig(savename+".png")
         plt.show()
         
@@ -249,7 +257,7 @@ def plotGR_alphabeta(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, 
         ax.tick_params(labelsize=FNTSZ)
         plt.title("$(\\alpha,\\beta,\\gamma)=$(%0.1f,%0.1f,%0.1f)"%(alpha_at_max,beta_at_max,gamma)+", $(\\alpha_2,\\beta_2,\\gamma)=$(%0.1f,%0.1f,%0.1f)"%(alpha2,beta2,gamma)+", A=%0.2f"%(A)+", $(k_x,k_z)=$(%0.1f,%0.1f)"%(kx,kz),fontsize=FNTSZ-4)
         plt.tight_layout()
-        plt.savefig(savename+"_eigenvector_un_Re.png")
+        #plt.savefig(savename+"_eigenvector_un_Re.png")
 
         fig,ax=plt.subplots(1,1,figsize=(11,8))
         ax.plot(np.linspace(-N_modes/2+1,N_modes/2,N_modes),np.imag(u_n),linewidth=lw,label="Im($u_n$) for $\\alpha,\\beta$",color='r')
@@ -267,10 +275,10 @@ def plotGR_alphabeta(A,Ek,N_res,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, 
         ax.tick_params(labelsize=FNTSZ)
         plt.title("$(\\alpha,\\beta,\\gamma)=$(%0.1f,%0.1f,%0.1f)"%(alpha_at_max,beta_at_max,gamma)+", $(\\alpha_2,\\beta_2,\\gamma)=$(%0.1f,%0.1f,%0.1f)"%(alpha2,beta2,gamma)+", A=%0.2f"%(A)+", $(k_x,k_z)=$(%0.1f,%0.1f)"%(kx,kz),fontsize=FNTSZ-4)
         #plt.tight_layout()
-        plt.savefig(savename+"_eigenvector_un_Im.png")
+        #plt.savefig(savename+"_eigenvector_un_Im.png")
 
 
-        plt.show()
+        # plt.show()
 
 
 def scan_n_save_A_vs_omega(Ek,s,N_res_A_om,N_res_ab,N_modes,alphamax,betamax,N_res_gamma,nv,norm,savename):
@@ -305,12 +313,16 @@ def plot_scan_A_vs_om(Ek,N_res_A_om,nv,savename):
     FNTSZ=24
     lw=2
     skip=1
-    theta      = np.linspace(1.0/N_res_A_om,90-1.0/N_res_A_om,N_res_A_om)*np.pi/180
+    theta      = np.linspace(10,80,N_res_A_om)*np.pi/180
     kx         = np.sin(theta)
     kz         = np.cos(theta)
+    #kx=1.0
+    #kz=np.logspace(-1,np.log10(4),N_res_A_om)
     k          = np.sqrt(kx**2+kz**2)
     om         = kz/k
     A          = np.logspace(-1,0,N_res_A_om)
+    #A          = np.logspace(-2,0,N_res_A_om)*k**1/kx
+
     growthrate=np.loadtxt(savename+".txt")
 
     fig,ax=plt.subplots(1,1,figsize=(10,8))
@@ -320,18 +332,22 @@ def plot_scan_A_vs_om(Ek,N_res_A_om,nv,savename):
     s_m.set_array([])
 
     for i in range(N_res_A_om)[::skip]:
-        ax.plot(om,growthrate[i,:]/A[i]/om,linewidth=lw,color=s_m.to_rgba(np.log10(A[i]) ))#label="$s$=%.2f"%(s[i]))
+        ax.plot(om,growthrate[i,:]/A[i],linewidth=lw,color=s_m.to_rgba(np.log10(A[i]) ))#label="$s$=%.2f"%(s[i]))
     cbar=plt.colorbar(s_m,ax=plt.gca())
     cbar.set_label("$\\log(A')$",rotation=90,fontsize=FNTSZ)
     cbar.ax.tick_params(labelsize=FNTSZ-4)
-    ax.set_xlabel("$\\frac{\\omega}{2\\Omega}$",fontsize=FNTSZ+4)
-    ax.set_ylabel("$\\frac{\\sigma}{A'|\\omega|}$",fontsize=FNTSZ+4,rotation=0,labelpad=20)
+    ax.set_xlabel("$\\frac{\\omega}{2\\Omega}$",fontsize=FNTSZ+8)
+    ax.set_ylabel("$\\frac{\\sigma^{\\max}}{A'|\\omega|}$",fontsize=FNTSZ+8,rotation=0,labelpad=40)
     #ax.set_xscale('log')
     #ax.set_yscale('log')
-
+    ax.set_ylim(0,0.4)
+    ax.set_xlim(0.01,1.0)
+    ax.axhline(y=3*np.sqrt(3)/16,linewidth=2,linestyle="--",color='black')
+    ax.text(0.8,0.335,"$\\sigma_{\\rm PSI}^{\\max}$",fontsize=FNTSZ-4)
     #SNOOPY comparison
-    om_marker=[1/np.sqrt(6**2+1**2),1/np.sqrt(4**2+1**2),1/np.sqrt(3**2+1**2),1/np.sqrt(2**2+1**2),1/np.sqrt(1**2+1**2),2/np.sqrt(1**2+2**2),3/np.sqrt(1**2+3**2)]
-    sigma_marker=[1.63,1.18,0.95,0.72,0.59,0.79,1.1]
+    om_marker=np.array([1/np.sqrt(6**2+1**2),1/np.sqrt(4**2+1**2),1/np.sqrt(3**2+1**2),1/np.sqrt(2**2+1**2),1/np.sqrt(1**2+1**2),2/np.sqrt(1**2+2**2),3/np.sqrt(1**2+3**2)])
+    sigma_marker=np.array([1.63,1.18,0.95,0.72,0.59,0.79,1.1])*np.sqrt(1-om_marker**2)*om_marker
+    
     ax.scatter(om_marker,sigma_marker,marker='x',color='black',s=100,zorder=100)
     
     ax.tick_params(labelsize=FNTSZ-4)
@@ -340,10 +356,10 @@ def plot_scan_A_vs_om(Ek,N_res_A_om,nv,savename):
     
     fig,ax=plt.subplots(1,1,figsize=(10,8))
     for i in range(N_res_A_om)[::skip]:
-        ax.plot(A,growthrate[:,i]/A/om[i],label="$\\omega$=%.2f"%(om[i]))
+        ax.plot(A,growthrate[:,i]/A,label="$\\omega$=%.2f"%(om[i]))
     ax.legend()
     ax.set_xlabel("$A'$",fontsize=FNTSZ+4)
-    ax.set_ylabel("$\\frac{\\sigma}{A'|\\omega|}$",fontsize=FNTSZ+4,rotation=0,labelpad=10)
+    ax.set_ylabel("$\\frac{\\sigma^{\\max}}{A'|\\omega|}$",fontsize=FNTSZ+4,rotation=0,labelpad=10)
     
     #ax.set_ylim(top=om[-1])
     #ax.set_xlim(right=s[-1])
@@ -360,7 +376,7 @@ def plot_scan_A_vs_om(Ek,N_res_A_om,nv,savename):
     cbar.ax.tick_params(labelsize=FNTSZ)
     cbar.set_label("$\\sigma$",fontsize=FNTSZ+4,rotation=0)
     ax.set_xlabel("$A'$",fontsize=FNTSZ+6)
-    ax.set_ylabel("$\\frac{\\omega}{2\\Omega}$",fontsize=FNTSZ+6,rotation=0,labelpad=10)
+    ax.set_ylabel("$\\frac{\\omega}{2\\Omega}$",fontsize=FNTSZ+6,rotation=0,labelpad=20)
     ax.set_xscale('log')
     #ax.set_yscale('log')
     #ax.set_ylim(top=om[-1])
@@ -372,10 +388,10 @@ def plot_scan_A_vs_om(Ek,N_res_A_om,nv,savename):
     plt.savefig(savename+".png")
     plt.show()
 
-def writeEigenmode(A,Ek,N_res,N_modes,gamma,kx,kz,nv,alpha,beta):
+def writeEigenmode(A,Ek,N_modes,alpha,beta,gamma,kx,kz,nv,norm):
     #write the real and imag components of the eigenvector of the fastest growing mode for a given alpha, beta
     #then plot the eigenmode and the divergence versus n
-    sigma,v=getMode(A,Ek,N_res,N_modes,alpha,beta,gamma,kx,kz,nv)
+    sigma,v=GR_at_alpha_beta_gamma(A,Ek,N_modes,alpha,beta,gamma,kx,kz,s,nv,norm)
     start=0#int(N_modes/2)-1
     print("Modes")
     print(np.linspace(-N_modes/2+1,N_modes/2,N_modes))
@@ -398,7 +414,7 @@ def writeEigenmode(A,Ek,N_res,N_modes,gamma,kx,kz,nv,alpha,beta):
     v_n=v[1::nv]
     w_n=v[2::nv]
     div_vel=np.abs(alpha*u_n+beta*v_n+n_index*w_n)
-    print("Growth rate:"+str(sigma))
+    print("Growth rate:"+str(np.real(sigma)))
     #print(u_n)
     lw=2
     FNTSZ=16
@@ -433,12 +449,14 @@ def writeEigenmode(A,Ek,N_res,N_modes,gamma,kx,kz,nv,alpha,beta):
 
 time_start = time.time()
 
-
+#if my_rank==0:
+#	writeEigenmode(A,Ek,N_modes,14,0,gamma,kx,kz,nv,norm)
 plotGR_alphabeta(A,Ek,N_res_ab,N_modes,alphamax,betamax,gamma,kx,kz,s,nv,norm, savename, readtxt)
 
 
 #Uncomment if the scan of A vs \omega is needed
 #scan_n_save_A_vs_omega(Ek,s,N_res_A_om,N_res_ab,N_modes,alphamax,betamax,N_res_gamma,nv,norm,savename)
+#savename='N64_Nab128_Ngamma8_Nmodes64'
 #if my_rank==0:
 #    plot_scan_A_vs_om(Ek,N_res_A_om,nv,savename)
 #writeEigenmode(A,Ek,N_res_ab,N_modes,gamma,kx,kz,nv,alpha=0.0,beta=4.0)

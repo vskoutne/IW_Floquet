@@ -1,22 +1,7 @@
 """
-Dedalus script simulating a 2D periodic incompressible shear flow with a passive
-tracer field for visualization. This script demonstrates solving a 2D periodic
-initial value problem. It can be ran serially or in parallel, and uses the
-built-in analysis framework to save data snapshots to HDF5 files. The
-`plot_snapshots.py` script can be used to produce plots from the saved data.
-The simulation should take about 10 cpu-minutes to run.
-
-The initial flow is in the x-direction and depends only on z. The problem is
-non-dimensionalized usign the shear-layer spacing and velocity jump, so the
-resulting viscosity and tracer diffusivity are related to the Reynolds and
-Schmidt numbers as:
-
-    nu = 1 / Reynolds
-    D = nu / Schmidt
-
 To run and plot using e.g. 4 processes:
-    $ mpiexec -n 4 python3 shear_flow.py
-    $ mpiexec -n 4 python3 plot_snapshots.py snapshots/*.h5
+    $ mpiexec -n 4 python iw.py
+    $ mpiexec -n 1 python save_alphabeta_data.py snapshots/snapshots_s1.h5
 """
 
 import numpy as np
@@ -32,27 +17,26 @@ if log2 == int(log2):
     logger.info("running on processor mesh={}".format(mesh))
 # mesh=[2,2]
 
-
 # Parameters
-nmodes = 32
-scale = 1
+nmodes = 32  # 16
+scale  = 2    # 1
 L = 2*np.pi*scale
 Nx, Ny, Nz = nmodes, nmodes, nmodes
 amp_noise = 1e-4 #initial noise level
 
-
 #Primary wave
-Ek=1e-6                     # Ekman number 
-theta_pw=10.0/180.0*np.pi   # Angle between \Omega and \vec{k}
-A=0.2                       # Amplitude
-s=1                         # Helicity
+Ek = 1e-6                     # Ekman number 
+theta_pw = 10.0/180.0*np.pi   # Angle between \Omega and \vec{k}
+A = 0.2                       # Amplitude
+s = 1                         # Helicity
 
-stop_sim_time = 100.0
-num_snapshots = 100
-num_slices=25
+stop_sim_time = 200.0
+num_snapshots = 200
+num_slices = 25
 
-timestepper = d3.RK222
-max_timestep = 1e-2
+timestepper = d3.RK443
+# timestepper = d3.SBDF2
+max_timestep = 0.1*A/40
 dtype = np.float64
 dealias = 3/2
 
@@ -74,20 +58,21 @@ x,y,z = dist.local_grids(xbasis,ybasis,zbasis)
 ex,ey,ez = coords.unit_vector_fields(dist)
 
 Omega=-np.tan(theta_pw)*ex+ez
-U['g'][0]=A*np.cos(x)
-U['g'][1]=s*A*np.sin(x)
+U['g'][0]=A*np.cos(z)
+U['g'][1]=s*A*np.sin(z)
 U['g'][2]=-s
 
 logger.info('------------------INFO------------------')
 logger.info('sim_time         = %0.2e' %(stop_sim_time))
 logger.info('Box scale factor = %0.2f' %(scale))
 logger.info('A                = %0.2f' %(A))
+logger.info('theta            = %0.2f' %(theta_pw*180/np.pi))
 logger.info('Ekman            = %0.2e' %(Ek))
 logger.info('---------------------------------------')
 
 # Problem
 problem = d3.IVP([u, p, tau_p], namespace=locals())
-problem.add_equation("dt(u) + grad(p)   - Ek*lap(u) = - u@grad(U)- U@grad(u)-cross(Omega,u)")
+problem.add_equation("dt(u) + grad(p)   = - u@grad(U)- U@grad(u)-cross(Omega,u)")# - Ek*lap(u)
 problem.add_equation("div(u) + tau_p = 0")
 problem.add_equation("integ(p) = 0") # Pressure gauge
 
@@ -97,11 +82,17 @@ solver = problem.build_solver(timestepper)
 solver.stop_sim_time = stop_sim_time
 
 # Initial conditions
-u.fill_random('g', seed=42, distribution='normal', scale=amp_noise) # Random noise, this doesn't satisfy Div(A)=0 so need to change it! but as a bad hack...
+u.fill_random('g', seed=43, distribution='normal', scale=amp_noise) # Random noise, this doesn't satisfy Div(A)=0 so need to change it! but as a bad hack...
+
+# for i in range(nmodes):
+#     amp=np.random.random()
+#     u['g'][0]+=amp_noise*np.sin(x)*amp*np.cos(i*z) 
+#     u['g'][1]+=amp_noise*np.cos(x)*amp*np.cos(i*z) 
+#     u['g'][2]+=amp_noise*np.cos(x)*amp*np.sin(i*z) 
 
 # Analysis
 
-snapshots = solver.evaluator.add_file_handler('snapshots', sim_dt=stop_sim_time/num_snapshots, max_writes=100)
+snapshots = solver.evaluator.add_file_handler('snapshots', sim_dt=stop_sim_time/num_snapshots, max_writes=1000)
 snapshots.add_task((ex@u),layout='g', name='ux')
 snapshots.add_task((ey@u),layout='g', name='uy')
 snapshots.add_task((ez@u),layout='g', name='uz')
