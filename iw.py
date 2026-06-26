@@ -1,7 +1,22 @@
 """
+Dedalus script simulating a 2D periodic incompressible shear flow with a passive
+tracer field for visualization. This script demonstrates solving a 2D periodic
+initial value problem. It can be ran serially or in parallel, and uses the
+built-in analysis framework to save data snapshots to HDF5 files. The
+`plot_snapshots.py` script can be used to produce plots from the saved data.
+The simulation should take about 10 cpu-minutes to run.
+
+The initial flow is in the x-direction and depends only on z. The problem is
+non-dimensionalized usign the shear-layer spacing and velocity jump, so the
+resulting viscosity and tracer diffusivity are related to the Reynolds and
+Schmidt numbers as:
+
+    nu = 1 / Reynolds
+    D = nu / Schmidt
+
 To run and plot using e.g. 4 processes:
-    $ mpiexec -n 4 python iw.py
-    $ mpiexec -n 1 python save_alphabeta_data.py snapshots/snapshots_s1.h5
+    $ mpiexec -n 4 python3 shear_flow.py
+    $ mpiexec -n 4 python3 plot_snapshots.py snapshots/*.h5
 """
 
 import numpy as np
@@ -17,26 +32,36 @@ if log2 == int(log2):
     logger.info("running on processor mesh={}".format(mesh))
 # mesh=[2,2]
 
+
 # Parameters
-nmodes = 32  # 16
-scale  = 2    # 1
+scale = 8
+nmodes = int(32*scale)
 L = 2*np.pi*scale
 Nx, Ny, Nz = nmodes, nmodes, nmodes
-amp_noise = 1e-4 #initial noise level
+amp_noise = 1e-3#/(nmodes/2)**3 #initial noise level
+
 
 #Primary wave
-Ek = 1e-6                     # Ekman number 
-theta_pw = 10.0/180.0*np.pi   # Angle between \Omega and \vec{k}
-A = 0.2                       # Amplitude
-s = 1                         # Helicity
+kx=6.0/8.0
+kz=1.0/8.0
+k=np.sqrt(kx**2+kz**2)
+theta_pw=np.arccos(kz/k)   # Angle between \Omega and \vec{k}
+A=0.3                      # Amplitude
+s=1                         # Helicity
+kbox = 2*np.pi/L*nmodes/2
+viscfactor = 1.0
+Ek = viscfactor*A/kbox**2
+#k=1
+#L=2*np.pi*scale/np.sin(theta_pw)
 
-stop_sim_time = 200.0
-num_snapshots = 200
-num_slices = 25
+
+stop_sim_time = 600
+num_snapshots = 20
+num_slices = 100
 
 timestepper = d3.RK443
-# timestepper = d3.SBDF2
-max_timestep = 0.1*A/40
+#timestepper = d3.SBDF2
+max_timestep = 0.1/5.0/A
 dtype = np.float64
 dealias = 3/2
 
@@ -49,6 +74,8 @@ zbasis = d3.RealFourier(coords['z'], size=Nz, bounds=(0, L), dealias=dealias)
 
 # Fields
 p = dist.Field(name='p', bases=(xbasis,ybasis,zbasis))
+Cosk = dist.Field(name='Cosk', bases=(xbasis,ybasis,zbasis))
+Sink = dist.Field(name='Sink', bases=(xbasis,ybasis,zbasis))
 u = dist.VectorField(coords, name='u', bases=(xbasis,ybasis,zbasis))
 U = dist.VectorField(coords, name='U', bases=(xbasis,ybasis,zbasis))
 tau_p = dist.Field(name='tau_p')
@@ -57,10 +84,13 @@ tau_p = dist.Field(name='tau_p')
 x,y,z = dist.local_grids(xbasis,ybasis,zbasis)
 ex,ey,ez = coords.unit_vector_fields(dist)
 
-Omega=-np.tan(theta_pw)*ex+ez
-U['g'][0]=A*np.cos(z)
-U['g'][1]=s*A*np.sin(z)
-U['g'][2]=-s
+Omega=ez #-np.tan(theta_pw)*ex+ez
+U['g'][0] = np.cos(theta_pw)*A*np.cos(kx*x+kz*z)
+U['g'][1] = A*np.sin(kx*x+kz*z)
+U['g'][2] = -np.sin(theta_pw)*A*np.cos(kx*x+kz*z)
+
+Cosk['g'] = np.cos(kx*x+kz*z)
+Sink['g'] = np.sin(kx*x+kz*z)
 
 logger.info('------------------INFO------------------')
 logger.info('sim_time         = %0.2e' %(stop_sim_time))
@@ -72,7 +102,7 @@ logger.info('---------------------------------------')
 
 # Problem
 problem = d3.IVP([u, p, tau_p], namespace=locals())
-problem.add_equation("dt(u) + grad(p)   = - u@grad(U)- U@grad(u)-cross(Omega,u)")# - Ek*lap(u)
+problem.add_equation("dt(u) + grad(p) - Ek*lap(u) +cross(Omega,u) = -u@grad(u)")
 problem.add_equation("div(u) + tau_p = 0")
 problem.add_equation("integ(p) = 0") # Pressure gauge
 
@@ -82,30 +112,50 @@ solver = problem.build_solver(timestepper)
 solver.stop_sim_time = stop_sim_time
 
 # Initial conditions
-u.fill_random('g', seed=43, distribution='normal', scale=amp_noise) # Random noise, this doesn't satisfy Div(A)=0 so need to change it! but as a bad hack...
-
-# for i in range(nmodes):
-#     amp=np.random.random()
-#     u['g'][0]+=amp_noise*np.sin(x)*amp*np.cos(i*z) 
-#     u['g'][1]+=amp_noise*np.cos(x)*amp*np.cos(i*z) 
-#     u['g'][2]+=amp_noise*np.cos(x)*amp*np.sin(i*z) 
+u.fill_random('g', seed=42, distribution='uniform') # Random noise, this doesn't satisfy Div(A)=0 so need to change it! but as a bad hack...
+u['g']*=amp_noise
+u['g'][0]+=U['g'][0]
+u['g'][1]+=U['g'][1]
+u['g'][2]+=U['g'][2]
 
 # Analysis
 
-snapshots = solver.evaluator.add_file_handler('snapshots', sim_dt=stop_sim_time/num_snapshots, max_writes=1000)
+slices = solver.evaluator.add_file_handler('slices', sim_dt=stop_sim_time/num_slices, max_writes=100)
+#slices.add_task((ex@d3.curl(u))(x=0),layout='g', name='omegaz_YZ')
+slices.add_task((ez@d3.curl(u))(z=0),layout='g', name='omegaz_XY')
+slices.add_task(d3.Average(ez@d3.curl(u), coords['z']),layout='g', name='omegaz_gs')
+
+
+slices.add_task((ex@u)(x=0),layout='g', name='ux_YZ')
+slices.add_task((ey@u)(x=0),layout='g', name='uy_YZ')
+slices.add_task((ez@u)(x=0),layout='g', name='uz_YZ')
+#slices.add_task((ex@u)(z=0),layout='g', name='ux_XY')
+#slices.add_task((ey@u)(z=0),layout='g', name='uy_XY')
+#slices.add_task((ez@u)(z=0),layout='g', name='uz_XY')
+#slices.add_task(d3.Average(ex@u,coords['z']),layout='g', name='ux_gs')
+#slices.add_task(d3.Average(ey@u,coords['z']),layout='g', name='uy_gs')
+#slices.add_task(d3.Average(ez@u,coords['z']),layout='g', name='uz_gs')
+
+snapshots = solver.evaluator.add_file_handler('snapshots', sim_dt=stop_sim_time/num_snapshots, max_writes=10000)
 snapshots.add_task((ex@u),layout='g', name='ux')
 snapshots.add_task((ey@u),layout='g', name='uy')
 snapshots.add_task((ez@u),layout='g', name='uz')
+snapshots.add_task( ez@d3.curl(u) ,layout='g', name='omegaz')
 
 series = solver.evaluator.add_file_handler('series', sim_dt=stop_sim_time/2e3)
 series.add_task(d3.Average(u@u), name='Urmssq')
-
-slices = solver.evaluator.add_file_handler('slices', sim_dt=stop_sim_time/num_slices, max_writes=100)
-slices.add_task((u@ex)(z=0), name='ux_XY')
-
+series.add_task(d3.Average((u@ex)**2), name='Urmssq_x')
+series.add_task(d3.Average((u@ey)**2), name='Urmssq_y')
+series.add_task(d3.Average((u@ez)**2), name='Urmssq_z')
+series.add_task(d3.Average(Ek*d3.curl(u)@d3.curl(u)), name='nu_omegasq')
+series.add_task(-d3.Average(u@(u@d3.grad(U)+ U@d3.grad(u))), name='P_in')
+series.add_task(d3.Average( d3.Average(u@ex,coords['z'])**2 ), name='Ux_rmssq_gs')
+series.add_task(d3.Average( d3.Average(u@ey,coords['z'])**2 ), name='Uy_rmssq_gs')
+series.add_task(d3.Average( d3.Average(u@ez,coords['z'])**2 ), name='Uz_rmssq_gs')
+series.add_task( 2*(d3.Average( ((u@ex)*Cosk) )**2+d3.Average( ((u@ey)*Cosk) )**2+d3.Average( ((u@ez)*Cosk) )**2+d3.Average( ((u@ex)*Sink) )**2+d3.Average( ((u@ey)*Sink) )**2+d3.Average( ((u@ez)*Sink) )**2 )  , name='Usq_IW')
 
 # CFL
-CFL = d3.CFL(solver, initial_dt=max_timestep, cadence=10, safety=0.25, threshold=0.1,
+CFL = d3.CFL(solver, initial_dt=max_timestep, cadence=10, safety=0.5, threshold=0.1,
              max_change=1.5, min_change=0.5, max_dt=max_timestep)
 CFL.add_velocity(u)
 
