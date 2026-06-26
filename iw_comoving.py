@@ -38,27 +38,24 @@ scale = 8
 nmodes = int(32*scale)
 L = 2*np.pi*scale
 Nx, Ny, Nz = nmodes, nmodes, nmodes
-amp_noise = 1e-7#/(nmodes/2)**3 #initial noise level
+amp_noise = 1e-3 #initial noise level
 
 
 #Primary wave
-kx=6.0/8.0
-kz=1.0/8.0
-k=np.sqrt(kx**2+kz**2)
-theta_pw=np.arccos(kz/k)   # Angle between \Omega and \vec{k}
+theta_pw=10/180*np.pi#np.arccos(kz/k)   # Angle between \Omega and \vec{k}
 A=0.3                      # Amplitude
 s=1                         # Helicity
 kbox = 2*np.pi/L*nmodes/2
-viscfactor = 1.0
+viscfactor = 0.75
 Ek = viscfactor*A/kbox**2
+
 #k=1
 #L=2*np.pi*scale/np.sin(theta_pw)
 
 
-stop_sim_time = 600
+stop_sim_time = 300.0
 num_snapshots = 20
 num_slices = 100
-num_cuboidslices = 1200
 
 timestepper = d3.RK443
 #timestepper = d3.SBDF2
@@ -75,23 +72,23 @@ zbasis = d3.RealFourier(coords['z'], size=Nz, bounds=(0, L), dealias=dealias)
 
 # Fields
 p = dist.Field(name='p', bases=(xbasis,ybasis,zbasis))
-Cosk = dist.Field(name='Cosk', bases=(xbasis,ybasis,zbasis))
-Sink = dist.Field(name='Sink', bases=(xbasis,ybasis,zbasis))
 u = dist.VectorField(coords, name='u', bases=(xbasis,ybasis,zbasis))
 U = dist.VectorField(coords, name='U', bases=(xbasis,ybasis,zbasis))
 tau_p = dist.Field(name='tau_p')
+Cosz = dist.Field(name='Cosz', bases=zbasis)
+Sinz = dist.Field(name='Sinz', bases=zbasis)
 
 # Substitutions
 x,y,z = dist.local_grids(xbasis,ybasis,zbasis)
 ex,ey,ez = coords.unit_vector_fields(dist)
 
-Omega=ez #-np.tan(theta_pw)*ex+ez
-U['g'][0] = np.cos(theta_pw)*A*np.cos(kx*x+kz*z)
-U['g'][1] = A*np.sin(kx*x+kz*z)
-U['g'][2] = -np.sin(theta_pw)*A*np.cos(kx*x+kz*z)
+Omega=-np.tan(theta_pw)*ex+ez
+U['g'][0] = A*np.cos(z)
+U['g'][1] = s*A*np.sin(z)
+U['g'][2] = -s
 
-Cosk['g'] = np.cos(kx*x+kz*z)
-Sink['g'] = np.sin(kx*x+kz*z)
+Cosz['g'] = np.cos(z)
+Sinz['g'] = np.sin(z)
 
 logger.info('------------------INFO------------------')
 logger.info('sim_time         = %0.2e' %(stop_sim_time))
@@ -103,7 +100,8 @@ logger.info('---------------------------------------')
 
 # Problem
 problem = d3.IVP([u, p, tau_p], namespace=locals())
-problem.add_equation("dt(u) + grad(p) - Ek*lap(u) +cross(Omega,u) = -u@grad(u)")
+problem.add_equation("dt(u) + grad(p) - Ek*lap(u) + cross(Omega, u) = -u@grad(u) - cross(Omega, ez)")
+#problem.add_equation("dt(u) + grad(p) - Ek*lap(u)  = -u@grad(u) - cross(Omega,u)")
 problem.add_equation("div(u) + tau_p = 0")
 problem.add_equation("integ(p) = 0") # Pressure gauge
 
@@ -113,53 +111,52 @@ solver = problem.build_solver(timestepper)
 solver.stop_sim_time = stop_sim_time
 
 # Initial conditions
-u.fill_random('c', seed=42, distribution='normal')
-u['c']*=amp_noise
+u.fill_random('g', seed=42, distribution='uniform') # Random noise, this doesn't satisfy Div(A)=0 so need to change it! but as a bad hack...
+u['g']*=amp_noise
 u['g'][0]+=U['g'][0]
 u['g'][1]+=U['g'][1]
 u['g'][2]+=U['g'][2]
 
 # Analysis
-cuboidslices = solver.evaluator.add_file_handler('cuboidslices', sim_dt=stop_sim_time/num_cuboidslices, max_writes=100)
-cuboidscales=2
-cuboidslices.add_task( (ez@d3.curl(u))(y=L) ,layout='g', name='omegaz_XZ_L',scales=cuboidscales)
-cuboidslices.add_task( (ez@d3.curl(u))(x=L) ,layout='g', name='omegaz_YZ_L',scales=cuboidscales)
-cuboidslices.add_task( (ez@d3.curl(u))(z=L) ,layout='g', name='omegaz_XY_L',scales=cuboidscales)
-
 
 slices = solver.evaluator.add_file_handler('slices', sim_dt=stop_sim_time/num_slices, max_writes=100)
-#slices.add_task((ex@d3.curl(u))(x=0),layout='g', name='omegaz_YZ')
-slices.add_task((ez@d3.curl(u))(z=0),layout='g', name='omegaz_XY')
-slices.add_task(d3.Average(ez@d3.curl(u), coords['z']),layout='g', name='omegaz_gs')
-
-
 slices.add_task((ex@u)(x=0),layout='g', name='ux_YZ')
 slices.add_task((ey@u)(x=0),layout='g', name='uy_YZ')
 slices.add_task((ez@u)(x=0),layout='g', name='uz_YZ')
-#slices.add_task((ex@u)(z=0),layout='g', name='ux_XY')
-#slices.add_task((ey@u)(z=0),layout='g', name='uy_XY')
-#slices.add_task((ez@u)(z=0),layout='g', name='uz_XY')
-#slices.add_task(d3.Average(ex@u,coords['z']),layout='g', name='ux_gs')
-#slices.add_task(d3.Average(ey@u,coords['z']),layout='g', name='uy_gs')
-#slices.add_task(d3.Average(ez@u,coords['z']),layout='g', name='uz_gs')
+slices.add_task((ex@u)(y=0),layout='g', name='ux_XZ')
+slices.add_task((ey@u)(y=0),layout='g', name='uy_XZ')
+slices.add_task((ez@u)(y=0),layout='g', name='uz_XZ')
+slices.add_task((ex@u)(z=0),layout='g', name='ux_XY')
+slices.add_task((ey@u)(z=0),layout='g', name='uy_XY')
+slices.add_task((ez@u)(z=0),layout='g', name='uz_XY')
+slices.add_task(d3.Average(ex@u,coords['z']),layout='g', name='ux_gs')
+slices.add_task(d3.Average(ey@u,coords['z']),layout='g', name='uy_gs')
+slices.add_task(d3.Average(ez@u,coords['z']),layout='g', name='uz_gs')
+slices.add_task(d3.Average(ez@(d3.curl(u)),coords['z']),layout='g', name='omegaz_gs')
+slices.add_task(ez@(d3.curl(u))(z=0),layout='g', name='omegaz_XY')
+slices.add_task(ey@(d3.curl(u))(y=0),layout='g', name='omegay_XZ')
+slices.add_task(ex@(d3.curl(u))(x=0),layout='g', name='omegax_YZ')
 
 snapshots = solver.evaluator.add_file_handler('snapshots', sim_dt=stop_sim_time/num_snapshots, max_writes=10000)
 snapshots.add_task((ex@u),layout='g', name='ux')
 snapshots.add_task((ey@u),layout='g', name='uy')
 snapshots.add_task((ez@u),layout='g', name='uz')
-snapshots.add_task( ez@d3.curl(u) ,layout='g', name='omegaz')
+snapshots.add_task((Omega@d3.curl(u))/(Omega@Omega)**0.5,layout='g', name='omegaz')
 
 series = solver.evaluator.add_file_handler('series', sim_dt=stop_sim_time/2e3)
 series.add_task(d3.Average(u@u), name='Urmssq')
 series.add_task(d3.Average((u@ex)**2), name='Urmssq_x')
 series.add_task(d3.Average((u@ey)**2), name='Urmssq_y')
 series.add_task(d3.Average((u@ez)**2), name='Urmssq_z')
+series.add_task(d3.Average((u@ez))**2, name='Uz_avg_sq')
+series.add_task(2*d3.Average((u@ex)*Cosz)**2, name='Usq_IW_x')
+series.add_task(2*d3.Average((u@ey)*Sinz)**2, name='Usq_IW_y')
 series.add_task(d3.Average(Ek*d3.curl(u)@d3.curl(u)), name='nu_omegasq')
 series.add_task(-d3.Average(u@(u@d3.grad(U)+ U@d3.grad(u))), name='P_in')
 series.add_task(d3.Average( d3.Average(u@ex,coords['z'])**2 ), name='Ux_rmssq_gs')
 series.add_task(d3.Average( d3.Average(u@ey,coords['z'])**2 ), name='Uy_rmssq_gs')
 series.add_task(d3.Average( d3.Average(u@ez,coords['z'])**2 ), name='Uz_rmssq_gs')
-series.add_task( 2*(d3.Average( ((u@ex)*Cosk) )**2+d3.Average( ((u@ey)*Cosk) )**2+d3.Average( ((u@ez)*Cosk) )**2+d3.Average( ((u@ex)*Sink) )**2+d3.Average( ((u@ey)*Sink) )**2+d3.Average( ((u@ez)*Sink) )**2 )  , name='Usq_IW')
+
 
 # CFL
 CFL = d3.CFL(solver, initial_dt=max_timestep, cadence=10, safety=0.5, threshold=0.1,

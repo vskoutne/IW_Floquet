@@ -1,0 +1,22 @@
+#!/bin/bash -l
+##PBS -lselect=16:ncpus=16:mpiprocs=16:model=has
+#PBS -lselect=5:ncpus=20:mpiprocs=20:model=has
+##PBS -q devel
+#PBS -l walltime=01:00:00
+#PBS -j eo
+
+source ~/.bashrc
+module list
+conda activate dedalus3
+#mpiexec -n 256 python iw.py
+#mpiexec -n 1 python plot_slices_2by2.py slices/slices_s1.h5
+#mpiexec -n 1 python plot_slices_2by2.py slices/slices_s2.h5
+#mpiexec -n 1 python plot_slices_2by2.py slices/slices_s3.h5
+#mpiexec -n 1 python plot_slices_2by2.py slices/slices_s4.h5
+#mpiexec -n 1 python alphabeta_spectra.py snapshots/snapshots_s1.h5
+#mpiexec -n 1 python plot_series.py series/series_s1.h5
+mpiexec -n 1 python plot_series_paperplots.py series/series_s1.h5
+mpiexec -n 1 python paperplot_ekspectrum3D.py snapshots/snapshots_s1.h5
+mpiexec -n 100 python pyvista_cuboid.py
+#mpiexec -n 1 python plot_ekspectrum3D.py snapshots/snapshots_s1.h5
+mpiexec -n 1 tar -czvf cuboid_frames.tar.gz frames/*.png
